@@ -12,8 +12,8 @@ let web3 = new Web3(new Web3.providers.WebsocketProvider(config.url.replace('htt
 web3.eth.defaultAccount = web3.eth.accounts[0];
 let flightSuretyApp = new web3.eth.Contract(FlightSuretyApp.abi, config.appAddress);
 const flightSuretyData = new web3.eth.Contract(FlightSuretyData.abi, config.dataAddress)
-const ACCOUNTS = 10 
-const ORACLES = 10
+const NUMBER_OF_ACCOUNTS = 10 // update in truffle.js and start ganacle-cli with the right number of accounts if necessary
+const NUMBER_OF_ORACLES = 10
 
 const Server = {
   oracles: [],
@@ -28,7 +28,7 @@ const Server = {
   },
 
   init: async function (numberOracles) {
-
+    // EVENTS LISTENERS
     flightSuretyApp.events.OracleRegistered()
       .on('data', log => {
         const { event, returnValues: { indexes } } = log
@@ -97,13 +97,13 @@ const Server = {
       })
       .on('error', error => { console.log(error) })
 
-    flightSuretyApp.events.FlightProcessed()
+    flightSuretyApp.events.flightProcessed()
       .on('data', log => {
         const { event, returnValues: { flightRef, destination, timestamp, statusCode } } = log
         console.log(`${event}: flight ${flightRef}, to ${destination}, landing ${timestamp}, status ${this.states[statusCode]}`)
       })
 
-    flightSuretyData.events.Funded()
+    flightSuretyData.events.providedFund()
       .on('data', log => {
         const { returnValues: { airline } } = log
         console.log(`${airline} provided funding`)
@@ -116,14 +116,14 @@ const Server = {
         console.log(`${event} from ${recipient}`)
       })
 
-    flightSuretyData.events.Paid()
+    flightSuretyData.events.amountPaid()
       .on('data', log => {
         const { event, returnValues: { recipient, amount } } = log
         console.log(`${event} ${amount} to ${recipient}`)
       })
 
 
-    flightSuretyData.events.Credited()
+    flightSuretyData.events.amountCredited()
       .on('data', log => {
         const { event, returnValues: { passenger, amount } } = log
         console.log(`${event} ${amount} to ${passenger}`)
@@ -133,7 +133,7 @@ const Server = {
     await flightSuretyData.methods.authorizeCaller(flightSuretyApp._address)
 
     // Add oracles addresses
-    this.oracles = (await web3.eth.getAccounts()).slice(ACCOUNTS - numberOracles)
+    this.oracles = (await web3.eth.getAccounts()).slice(NUMBER_OF_ACCOUNTS - numberOracles)
     // register oracles
     const REGISTRATION_FEE = await flightSuretyApp.methods.REGISTRATION_FEE().call()
     this.oracles.forEach(async account => {
@@ -169,6 +169,7 @@ const Server = {
             statusCode
           ).send({ from: oracle })
         } catch (error) {
+          // console.log(error.message)
         }
       })
     })
@@ -185,6 +186,7 @@ const Server = {
         for (let j = 0; j < 9; j++) {
           delete flight[j]
         }
+        // as unique key, an index is added and will be displayed in the front end form (instead of displaying the hash key)
         this.flights.push({
           index: i,
           key: key,
@@ -192,11 +194,12 @@ const Server = {
         })
       }
     } catch (error) {
+      // console.log('No flights to add')
     }
   }
 }
 
-Server.init(ORACLES)
+Server.init(NUMBER_OF_ORACLES)
 
 const app = express()
 app.use(bodyParser.json())
@@ -206,6 +209,7 @@ app.use(function (req, res, next) {
   next()
 })
 app.use(express.json())
+// app.use(bodyParser.urlencoded({ extended: true }))
 app.get('/api', (req, res) => {
   res.send({
     message: 'An API for use with your Dapp!'
